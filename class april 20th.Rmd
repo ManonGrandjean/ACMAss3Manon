@@ -1,0 +1,109 @@
+---
+title: "ACM Ass3 experimentation"
+author: "Manon Grandjean"
+date: "2023-04-20"
+output: html_document
+---
+
+```{r}
+library(extraDistr)
+library(tidyverse)
+```
+
+Parameters:
+*Social conformity* is how much a person adopts the other rating in their second rating
+*Bias* is a persons tendency towards being more trusting or less trusting overall
+
+Observables:
+*First rating* drawn from a beta distribution with a mean of bias (and a fixed SD)
+*Other rating* is randomly generated at either -3,-2,0,2,3 higher/lower than first rating. Equally likely (though still within 1-8)
+*feedback* is difference between first and other rating
+*Second rating* is = first rating + social conformity * feedback
+
+
+```{r Agent function (1 trial)}
+# create function that takes agent's parameters
+SocialConformityAgent <- function(AgentID, bias, socialConf){
+  # generate a first rating (using bias and fixed sd) (between 0-1, so we have to transform to 1-8 afterwards)
+  first <- round(rprop(1, mean = bias, size = 3)*7+1)
+          #size is a precision parameters (2 = uniform)
+          # "*7+1" transform from 0-1 space to 1-8 space :-)
+  
+  # generate other rating and calculate feedback
+  feedback <- sample(c(-3,-2,0,2,3), size = 1)
+  other <- first+feedback
+  
+  while(other < 1 | other > 8){
+    feedback <- sample(c(-3,-2,0,2,3), size = 1)
+    other <- first+feedback
+  }
+  
+  # generate second rating (using social conformity, first rating, and feedback)
+  second <- round(first + socialConf * feedback)
+  
+  # save info to df
+  #return(c(first,other,second))
+  df <- data.frame(AgentID = AgentID,
+                     FirstRating = first,
+                     OtherRating = other,
+                     Feedback = feedback,
+                     SecondRating = second)
+  return(df)
+}
+
+
+# see what precision we want
+#hist(rprop(10000, mean = 0.5, size = 3))
+
+```
+
+
+```{r simulations dataframe}
+# create empty df
+df_sim <- data.frame(AgentID = c(),
+                     FirstRating = c(),
+                     OtherRating = c(),
+                     Feedback = c(),
+                     SecondRating = c())
+```
+
+
+```{r}
+# make one agent per unique combinations 
+df_agents <- expand.grid(bias = seq(from = 0.0, to = 1.0, by = 0.1),
+                         socialConf = seq(from = 0.0, to = 1.0, by = 0.1)) 
+                          # socialConf can only be negative if we allow contrarian agents
+# Adding Agent IDs
+df_agents <- mutate(df_agents, AgentID = paste0("ID_",row_number()))
+```
+
+
+```{r}
+#df_sim <- rbind(df_sim,SocialConformityAgent("ID1", 0.5, 0.2))
+
+# number of trials per agent
+trials = 2
+
+for(i in 1:nrow(df_agents)){ # iterate over agents
+  for(t in 1:trials){ # iterate over trials
+    df_sim <- rbind(df_sim, SocialConformityAgent(df_agents$AgentID[i], df_agents$bias[i], df_agents$socialConf[i]))
+  }
+}
+
+```
+
+
+```{r}
+#for(i in length(df_agents)){
+#  print(df_agents$AgentID)}
+
+df_sim <- rbind(df_sim, SocialConformityAgent(df_agents$AgentID[3], df_agents$bias[3], df_agents$socialConf[3]))
+
+
+for(i in 1:nrow(df_agents)){ # iterate over agents
+  print(paste(df_agents$AgentID[i], df_agents$bias[i], df_agents$socialConf[i]))
+  #df_sim <- rbind(df_sim, SocialConformityAgent(df_agents$AgentID[i], df_agents$bias[i], df_agents$socialConf[i]))
+}
+
+```
+
