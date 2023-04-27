@@ -1,0 +1,105 @@
+---
+title: "ACM Ass3 experimentation"
+author: "Manon Grandjean"
+date: "2023-04-20"
+output: html_document
+---
+
+```{r}
+library(extraDistr)
+library(tidyverse)
+library(brms)
+```
+
+Parameters:
+*Bias* is a persons tendency towards being more trusting or less trusting overall (on the first rating)
+*precision1* is how much we vary around our bias when picking a first rating
+*precision2* is the noise term when picking a second rating
+*w1* is how much we trust our first rating
+*w2* is how much we trust the other's rating
+
+Observables:
+*First rating* drawn from a beta distribution with a mean of bias (and a precision of precision1)
+*Other rating* is randomly generated at either -3,-2,0,2,3 higher/lower than first rating. Equally likely (though still within 1-8)
+*feedback* is difference between first and other rating
+*Second rating* is drawn from a beta distribution with precision2 and a mean which is calculated as the inverse logit of a weighting our first and other ratings with their resepctive weights (ratings in log odds space) = logit_scaled(first rating) w1 + logit_scaled(other's rating) * w2
+
+
+```{r Simple Bayes Agent function (1 trial)}
+# create function that takes agent's parameters
+SimAgent_SimpleBayes <- function(AgentID, bias, precision1, precision2){
+  # generate a first rating (using bias and fixed sd) (between 0-1, so we have to transform to 1-8 afterwards)
+  first <- round(rprop(1, mean = bias, size = precision1)*7+1)
+          #size is a precision parameters (2 = uniform)
+          # "*7+1" transform from 0-1 space to 1-8 space :-)
+  
+  # generate other rating and calculate feedback
+  feedback <- sample(c(-3,-2,0,2,3), size = 1)
+  other <- first+feedback
+  
+  while(other < 1 | other > 8){
+    feedback <- sample(c(-3,-2,0,2,3), size = 1)
+    other <- first+feedback
+  }
+  
+  # generate second rating (using social conformity, first rating, and feedback)
+  #second <- round(first + socialConf * feedback)
+  # use log odds space
+  second <- round(rprop(1,
+                        mean = logit_scaled(first)*0.5 + logit_scaled(other)*0.5,
+                        size = precision2))
+  
+  # save info to df
+  #return(c(first,other,second))
+  df <- data.frame(AgentID = AgentID,
+                     FirstRating = first,
+                     OtherRating = other,
+                     Feedback = feedback,
+                     SecondRating = second)
+  return(df)
+}
+
+
+# see what precision we want
+#hist(rprop(10000, mean = 0.6, size = 2))
+
+```
+
+
+```{r simulations dataframe}
+# create empty df
+simulationsSB <- data.frame(AgentID = c(),
+                     FirstRating = c(),
+                     OtherRating = c(),
+                     Feedback = c(),
+                     SecondRating = c())
+```
+
+
+```{r}
+# make one agent per unique combinations 
+agentsSB <- expand.grid(bias = seq(from = 0.1, to = 0.9, by = 0.1), # bias of 0 and of 1 give NA in rprop function!! 
+                        precision1 = seq(from = 2, to = 100, by = 10),
+                        precision1 = seq(from = 2, to = 100, by = 10)) 
+                          # socialConf can only be negative if we allow contrarian agents
+# Adding Agent IDs
+agentsSB <- mutate(agentsSB, AgentID = paste0("ID_",row_number()))
+```
+
+
+```{r simulate ratings for all agents}
+
+# number of trials per agent
+trials = 2
+
+for(i in 1:nrow(df_agents)){ # iterate over agents
+  for(t in 1:trials){ # iterate over trials
+    df_sim <- rbind(df_sim, SocialConformityAgent(df_agents$AgentID[i], df_agents$bias[i], df_agents$socialConf[i]))
+  }
+}
+
+```
+
+
+
+
